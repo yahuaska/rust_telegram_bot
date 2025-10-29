@@ -24,7 +24,7 @@ pub struct UserOption(pub Option<User>);
 impl Display for User {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = format!(
-            "{}:{}{}",
+            "{}{}{}",
             self.first_name,
             match &self.last_name {
                 Some(n) => format!(" {}", n),

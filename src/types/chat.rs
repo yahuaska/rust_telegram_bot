@@ -16,8 +16,8 @@ impl Display for Chat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let chat_name = format!(
             "{}{}",
-            self.first_name.clone().unwrap_or(String::new()),
-            self.last_name.clone().unwrap_or(String::new()),
+            self.first_name.clone().unwrap_or_default(),
+            self.last_name.clone().unwrap_or_default(),
         );
         let results = vec![
             write!(f, "Chat("),
@@ -27,13 +27,8 @@ impl Display for Chat {
             write!(f, ")"),
         ];
         for r in results {
-            if r.is_err() {
-                return r;
-            }
+            r?
         }
-        return Ok(());
-        //     "Chat(\nid: {}\nchat_type:{}\n{chat_name}\n)",
-        //     self.id, self.chat_type
-        // );
+        Ok(())
     }
 }

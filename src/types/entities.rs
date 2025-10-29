@@ -1,12 +1,31 @@
 use serde::de;
 use std::fmt::Display;
 
-use crate::types::{User, UserOption};
+use crate::types::User;
 use serde::{Deserialize, Serialize};
 
+/// Type of the entity.
+/// Currently, can be “mention” (@username),
+/// “hashtag” (#hashtag or #hashtag@chatusername),
+/// “cashtag” ($USD or $USD@chatusername),
+/// “bot_command” (/start@jobs_bot),
+/// “url” (https://telegram.org),
+/// “email” (do-not-reply@telegram.org),
+/// “phone_number” (+1-212-555-0123),
+/// “bold” (bold text),
+/// “italic” (italic text),
+/// “underline” (underlined text),
+/// “strikethrough” (strikethrough text),
+/// “spoiler” (spoiler message),
+/// “blockquote” (block quotation),
+/// “expandable_blockquote” (collapsed-by-default block quotation),
+/// “code” (monowidth string),
+/// “pre” (monowidth block),
+/// “text_link” (for clickable text URLs),
+/// “text_mention” (for users without usernames),
+/// “custom_emoji” (for inline custom emoji stickers)
 #[derive(Debug, Serialize)]
 pub enum EntityType {
-    // Type of the entity. Currently, can be “mention” (@username), “hashtag” (#hashtag or #hashtag@chatusername), “cashtag” ($USD or $USD@chatusername), “bot_command” (/start@jobs_bot), “url” (https://telegram.org), “email” (do-not-reply@telegram.org), “phone_number” (+1-212-555-0123), “bold” (bold text), “italic” (italic text), “underline” (underlined text), “strikethrough” (strikethrough text), “spoiler” (spoiler message), “blockquote” (block quotation), “expandable_blockquote” (collapsed-by-default block quotation), “code” (monowidth string), “pre” (monowidth block), “text_link” (for clickable text URLs), “text_mention” (for users without usernames), “custom_emoji” (for inline custom emoji stickers)
     Mention,
     Hashtag,
     Cashtag,
@@ -87,14 +106,25 @@ pub struct Entity {
 
 impl Display for Entity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let optional_user: UserOption = UserOption(match &self.user {
-            Some(user) => Some(user.clone()),
-            None => None,
-        });
         write!(
             f,
-            "Entity {{ type: {:#?}, offset: {}, length: {}, url: {}, user: {}, language: {:?}, custom_emoji_id: {:?} }}",
-            self.entity_type, self.offset, self.length, self.url.clone().unwrap_or_default(), optional_user, self.language, self.custom_emoji_id
-        )
+            "Entity {{ type: {:?}, offset: {}, length: {}",
+            self.entity_type, self.offset, self.length
+        )?;
+
+        if let Some(url) = &self.url {
+            write!(f, ", url: {url}")?;
+        }
+        if let Some(user) = &self.user {
+            write!(f, ", user: {user}")?;
+        }
+        if let Some(lang) = &self.language {
+            write!(f, ", language: {lang}")?;
+        }
+        if let Some(cei) = &self.custom_emoji_id {
+            write!(f, ", custom_emoji_id: {cei}")?;
+        }
+
+        write!(f, " }}")
     }
 }

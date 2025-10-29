@@ -16,9 +16,7 @@ pub struct Command {
 
 /// Decides which command to execute based on the message content and its arguments
 pub fn decide_command(msg: &Message) -> Option<Command> {
-    if msg.entities.is_none() {
-        return None;
-    }
+    msg.entities.as_ref()?;
     let entities = msg.entities.as_ref().unwrap();
     let mut command = BotCommand::Unknown;
     let mut args = Vec::new();
@@ -69,9 +67,6 @@ pub fn decide_command(msg: &Message) -> Option<Command> {
             println!("Received unknown command");
             None
         }
-        _ => Some(Command {
-            command: command,
-            args: args,
-        }),
+        _ => Some(Command { command, args }),
     }
 }

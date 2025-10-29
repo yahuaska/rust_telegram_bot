@@ -27,11 +27,11 @@ pub trait HttpClient {
 }
 
 impl<T: HttpClient> ApiClient<T> {
-    pub fn new(client: T, url_formater: UrlFormatter, bot_config: BotConfig) -> Self {
+    pub fn new(client: T, url_format: UrlFormatter, bot_config: BotConfig) -> Self {
         Self {
-            client: client,
-            url_format: url_formater,
-            bot_config: bot_config,
+            client,
+            url_format,
+            bot_config,
         }
     }
 
@@ -51,7 +51,6 @@ impl<T: HttpClient> ApiClient<T> {
         println!("Calling: {url}");
         let resp = self.client.get(&url).await;
 
-        // let resp = resp.text().await?;
         match resp {
             Ok(resp) => {
                 println!("resp: {resp:#}");
@@ -76,7 +75,6 @@ impl<T: HttpClient> ApiClient<T> {
         println!("Calling: {url}");
         let resp = self.client.get(&url).await;
 
-        // let resp = resp.text().await?;
         match resp {
             Ok(resp) => {
                 let result = serde_json::from_str(&resp);

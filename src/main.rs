@@ -6,6 +6,7 @@ use crate::types::GetMeResponse;
 use std::env;
 
 pub mod api_client;
+pub mod command_runner;
 pub mod commands;
 pub mod http_clients;
 pub mod types;
@@ -73,7 +74,11 @@ async fn main() {
             };
             let cmd = decide_command(message);
             match cmd {
-                Some(Command { command, args }) => {
+                Some(Command {
+                    command,
+                    args,
+                    message,
+                }) => {
                     println!("Command: {:#?}, args: {:#?}", command, args);
                 }
                 None => {

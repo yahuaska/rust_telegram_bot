@@ -12,6 +12,7 @@ pub enum BotCommand {
 pub struct Command {
     pub command: BotCommand,
     pub args: Vec<String>,
+    pub message: Message,
 }
 
 /// Decides which command to execute based on the message content and its arguments

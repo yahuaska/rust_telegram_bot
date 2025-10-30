@@ -45,10 +45,6 @@ impl Update {
     pub fn get_update_id(&self) -> i64 {
         self.update_id
     }
-
-    pub fn get_edited_message(&self) -> &Message {
-        self.edited_message.as_ref().unwrap()
-    }
 }
 
 #[derive(Clone, Debug)]

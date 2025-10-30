@@ -3,6 +3,8 @@ use crate::commands::{decide_command, Command};
 use crate::http_clients::ReqwestHttpClient;
 use crate::types::BotConfig;
 use crate::types::GetMeResponse;
+
+use futures_util::StreamExt;
 use std::env;
 
 pub mod api_client;
@@ -47,13 +49,11 @@ async fn main() {
     );
     print_me(api_client.get_me().await.unwrap());
     loop {
-        let updates = match api_client.get_updates().await {
-            Some(updates) => updates,
-            None => {
-                continue;
-            }
-        };
-        for update in &updates.result {
+        println!("Running the generator");
+        let stream = api_client.yield_updates().await;
+        tokio::pin!(stream);
+        println!("Querring the generator");
+        while let Some(update) = stream.next().await {
             api_client.update_offset(update.update_id);
             println!(
                 "Update ID: {}\n{}",
@@ -64,7 +64,7 @@ async fn main() {
                     _ => "No message".to_string(),
                 }
             );
-            let message = match (&update.message, &update.edited_message) {
+            let message = match (update.message, update.edited_message) {
                 (Some(msg), None) => msg,
                 (None, Some(edited_msg)) => edited_msg,
                 _ => {
@@ -79,7 +79,10 @@ async fn main() {
                     args,
                     message,
                 }) => {
-                    println!("Command: {:#?}, args: {:#?}", command, args);
+                    println!(
+                        "Command: {:#?}, args: {:#?} #{}",
+                        command, args, message.message_id
+                    );
                 }
                 None => {
                     println!("No command");

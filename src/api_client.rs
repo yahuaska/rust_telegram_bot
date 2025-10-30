@@ -1,4 +1,6 @@
 use crate::types::{BotConfig, GetMeResponse, Update};
+use async_stream::stream;
+use futures_core::stream::Stream;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::future::Future;
@@ -26,7 +28,7 @@ pub trait HttpClient {
     fn format_error(&self, error: Self::Error) -> String;
 }
 
-impl<T: HttpClient> ApiClient<T> {
+impl<T: HttpClient + Clone> ApiClient<T> {
     pub fn new(client: T, url_format: UrlFormatter, bot_config: BotConfig) -> Self {
         Self {
             client,
@@ -66,6 +68,39 @@ impl<T: HttpClient> ApiClient<T> {
             Err(err) => {
                 println!("Err on request: {:#?}", self.client.format_error(err));
                 None
+            }
+        }
+    }
+
+    pub async fn yield_updates(&self) -> impl Stream<Item = Update> {
+        let url = format!(
+            "{}?offset={}&timeout={}",
+            self.url("getUpdates"),
+            self.bot_config.offset,
+            self.bot_config.polling_timeout
+        );
+        let client = self.client.clone();
+        stream! {
+            println!("Calling: {url}");
+            if let Ok(resp) = client.get(&url).await {
+                let result: Result<serde_json::Value, _> = serde_json::from_str(&resp);
+                if let Ok(result) = result {
+                    if let Some(obj) = result.get("ok") {
+                        if obj.as_bool().unwrap_or(false) {
+                            if let Some(obj) = result.get("result") {
+                                if let Some(updates) = obj.as_array() {
+                                    for json_update in updates.iter() {
+                                        if let Ok(update) = serde_json::from_value::<Update>(json_update.clone())
+                                        {
+                                            println!("Got update: {}", update.get_update_id());
+                                            yield update;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

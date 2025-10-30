@@ -3,12 +3,12 @@ use crate::commands::{decide_command, Command};
 use crate::http_clients::ReqwestHttpClient;
 use crate::types::BotConfig;
 use crate::types::GetMeResponse;
+use tokio::sync::mpsc;
 
 use futures_util::StreamExt;
 use std::env;
 
 pub mod api_client;
-pub mod command_runner;
 pub mod commands;
 pub mod http_clients;
 pub mod types;
@@ -28,20 +28,7 @@ fn print_me(resp: GetMeResponse) {
     }
 }
 
-#[tokio::main]
-async fn main() {
-    const TOKEN_KEY: &str = "TOKEN";
-    let bot_config = match env::var(TOKEN_KEY) {
-        Ok(val) => BotConfig {
-            token: val.to_owned(),
-            offset: 0,
-            polling_timeout: 30,
-        },
-        Err(_) => {
-            println!("Warning: {} is not set. Using default token.", TOKEN_KEY);
-            return;
-        }
-    };
+async fn updates_loop(bot_config: BotConfig, tx: mpsc::Sender<Command>) {
     let mut api_client = ApiClient::new(
         ReqwestHttpClient::new(),
         |token: &str, method: &str| format!("https://api.telegram.org/bot{token}/{method}"),
@@ -74,15 +61,8 @@ async fn main() {
             };
             let cmd = decide_command(message);
             match cmd {
-                Some(Command {
-                    command,
-                    args,
-                    message,
-                }) => {
-                    println!(
-                        "Command: {:#?}, args: {:#?} #{}",
-                        command, args, message.message_id
-                    );
+                Some(command) => {
+                    tx.send(command).await.unwrap();
                 }
                 None => {
                     println!("No command");
@@ -90,4 +70,36 @@ async fn main() {
             };
         }
     }
+}
+
+async fn worker(mut rx: mpsc::Receiver<Command>) {
+    while let Some(command) = rx.recv().await {
+        println!(
+            "Command: {:#?}, args: {:#?} #{}",
+            command.command, command.args, command.message.message_id
+        );
+    }
+}
+
+#[tokio::main]
+async fn main() {
+    let (tx, rx) = tokio::sync::mpsc::channel(100);
+    let _: &mpsc::Sender<Command> = &tx;
+    const TOKEN_KEY: &str = "TOKEN";
+    let bot_config = match env::var(TOKEN_KEY) {
+        Ok(val) => BotConfig {
+            token: val.to_owned(),
+            offset: 0,
+            polling_timeout: 30,
+        },
+        Err(_) => {
+            println!("Warning: {} is not set. Using default token.", TOKEN_KEY);
+            return;
+        }
+    };
+
+    tokio::spawn(updates_loop(bot_config.clone(), tx.clone()));
+    tokio::spawn(worker(rx));
+    // ждём, пока не нажмут Ctrl+C
+    tokio::signal::ctrl_c().await.unwrap();
 }

@@ -18,7 +18,7 @@ pub struct Command {
 /// Decides which command to execute based on the message content and its arguments
 /// Consumes the message
 pub fn decide_command(message: Message) -> Option<Command> {
-    let entities = message.entities.as_ref().unwrap();
+    let entities = message.entities.as_ref()?;
     let mut command = BotCommand::Unknown;
     let mut args = Vec::new();
     for entity in entities {

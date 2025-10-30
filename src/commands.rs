@@ -16,9 +16,9 @@ pub struct Command {
 }
 
 /// Decides which command to execute based on the message content and its arguments
-pub fn decide_command(msg: &Message) -> Option<Command> {
-    msg.entities.as_ref()?;
-    let entities = msg.entities.as_ref().unwrap();
+/// Consumes the message
+pub fn decide_command(message: Message) -> Option<Command> {
+    let entities = message.entities.as_ref().unwrap();
     let mut command = BotCommand::Unknown;
     let mut args = Vec::new();
     for entity in entities {
@@ -26,7 +26,7 @@ pub fn decide_command(msg: &Message) -> Option<Command> {
             EntityType::BotCommand => {
                 let start: usize = entity.offset as usize;
                 let end: usize = start + entity.length as usize;
-                match &msg.text {
+                match &message.text {
                     Some(text) => {
                         let cmd = text[start..end].trim_start_matches("/").to_lowercase();
                         command = match cmd.as_str() {
@@ -45,7 +45,7 @@ pub fn decide_command(msg: &Message) -> Option<Command> {
             EntityType::Url => {
                 let start: usize = entity.offset as usize;
                 let end: usize = start + entity.length as usize;
-                match &msg.text {
+                match &message.text {
                     Some(text) => {
                         let url = text[start..end].to_string();
                         args.push(url);
@@ -68,6 +68,10 @@ pub fn decide_command(msg: &Message) -> Option<Command> {
             println!("Received unknown command");
             None
         }
-        _ => Some(Command { command, args }),
+        _ => Some(Command {
+            command,
+            args,
+            message,
+        }),
     }
 }

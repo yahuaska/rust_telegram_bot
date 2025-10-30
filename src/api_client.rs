@@ -5,6 +5,39 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::future::Future;
 
+macro_rules! unwrap_or {
+    ($expr:expr, continue) => {
+        match $expr {
+            Some(val) => val,
+            None => continue,
+        }
+    };
+    ($expr:expr, $on_err:expr, continue) => {
+        match $expr {
+            Ok(val) => val,
+            Err(e) => {
+                $on_err(e);
+                continue;
+            }
+        }
+    };
+    ($expr:expr, return) => {
+        match $expr {
+            Some(val) => val,
+            None => return,
+        }
+    };
+    ($expr:expr, $on_err:expr, return) => {
+        match $expr {
+            Ok(val) => val,
+            Err(e) => {
+                $on_err(e);
+                return;
+            }
+        }
+    };
+}
+
 type UrlFormatter = fn(&str, &str) -> String;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -82,24 +115,18 @@ impl<T: HttpClient + Clone> ApiClient<T> {
         let client = self.client.clone();
         stream! {
             println!("Calling: {url}");
-            if let Ok(resp) = client.get(&url).await {
-                let result: Result<serde_json::Value, _> = serde_json::from_str(&resp);
-                if let Ok(result) = result {
-                    if let Some(obj) = result.get("ok") {
-                        if obj.as_bool().unwrap_or(false) {
-                            if let Some(obj) = result.get("result") {
-                                if let Some(updates) = obj.as_array() {
-                                    for json_update in updates.iter() {
-                                        if let Ok(update) = serde_json::from_value::<Update>(json_update.clone())
-                                        {
-                                            println!("Got update: {}", update.get_update_id());
-                                            yield update;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+            let resp = unwrap_or!(client.get(&url).await, |e| {
+                println!("Err on request: {:#?}", client.format_error(e));
+            }, return);
+            let result = unwrap_or!(serde_json::from_str::<serde_json::Value>(&resp), |e| println!("Failed to deserialize: {e}"), return);
+            let obj = unwrap_or!(result.get("ok"), return);
+            if obj.as_bool().unwrap_or(false) {
+                let obj = unwrap_or!(result.get("result"), return);
+                let updates = unwrap_or!(obj.as_array(), return);
+                for json_update in updates.iter() {
+                    let update = unwrap_or!(serde_json::from_value::<Update>(json_update.clone()), |e| println!("Failed to deserialize update: {e}"), continue);
+                    println!("Got update: {}", update.get_update_id());
+                    yield update;
                 }
             }
         }

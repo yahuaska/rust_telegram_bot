@@ -1,5 +1,6 @@
 use crate::api_client::HttpClient;
 
+#[derive(Clone)]
 pub struct ReqwestHttpClient {
     client: reqwest::Client,
 }

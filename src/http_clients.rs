@@ -31,11 +31,12 @@ impl HttpClient for ReqwestHttpClient {
         Ok(body)
     }
 
-    async fn post(&self, url: &str, body: &str) -> Result<String, Self::Error> {
+    async fn post(&self, url: &str, body: String) -> Result<String, Self::Error> {
         let response = self
             .client
             .post(url)
-            .body(String::from(body))
+            .header("Content-Type", "application/json")
+            .body(body)
             .send()
             .await?;
         let body = response.text().await?;

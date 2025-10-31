@@ -63,7 +63,7 @@ pub trait HttpClient {
     fn post<'a>(
         &'a self,
         url: &'a str,
-        body: &'a str,
+        body: String,
     ) -> impl Future<Output = Result<String, Self::Error>> + Send + 'a;
     fn format_error(&self, error: Self::Error) -> String;
 }

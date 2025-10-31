@@ -72,12 +72,23 @@ async fn updates_loop(bot_config: BotConfig, tx: mpsc::Sender<Command>) {
     }
 }
 
-async fn worker(mut rx: mpsc::Receiver<Command>) {
+async fn worker(bot_config: BotConfig, mut rx: mpsc::Receiver<Command>) {
+    let api_client = ApiClient::new(
+        ReqwestHttpClient::new(),
+        |token: &str, method: &str| format!("https://api.telegram.org/bot{token}/{method}"),
+        bot_config,
+    );
     while let Some(command) = rx.recv().await {
-        println!(
-            "Command: {:#?}, args: {:#?} #{}",
+        let text = format!(
+            "*Command*: {:#?},\n*args*: `{:#?}`\n`#{}`\n",
             command.command, command.args, command.message.message_id
         );
+        let message = api_client
+            .send_message(command.message.chat.id(), text)
+            .await;
+        if let Some(message) = message {
+            println!("Get back message:\n {message:#}");
+        }
     }
 }
 
@@ -99,7 +110,7 @@ async fn main() {
     };
 
     tokio::spawn(updates_loop(bot_config.clone(), tx.clone()));
-    tokio::spawn(worker(rx));
+    tokio::spawn(worker(bot_config.clone(), rx));
     // ждём, пока не нажмут Ctrl+C
     tokio::signal::ctrl_c().await.unwrap();
 }

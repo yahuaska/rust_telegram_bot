@@ -1,3 +1,4 @@
+use crate::types::Message;
 use crate::types::{BotConfig, GetMeResponse, Update};
 use async_stream::stream;
 use futures_core::stream::Stream;
@@ -80,6 +81,54 @@ impl<T: HttpClient + Clone> ApiClient<T> {
     pub fn update_offset(&mut self, offset: i64) {
         if offset >= self.bot_config.offset {
             self.bot_config.offset = offset + 1;
+        }
+    }
+
+    pub async fn send_message(&self, chat_id: i64, text: String) -> Option<Message> {
+        let url = self.url("sendMessage");
+        #[derive(Debug, Serialize, Deserialize)]
+        struct Payload {
+            chat_id: i64,
+            text: String,
+            parse_mode: String,
+        }
+        let resp = {
+            let payload = Payload {
+                chat_id,
+                text: text,
+                parse_mode: String::from("MarkdownV2"),
+            };
+            let body = match serde_json::to_string(&payload) {
+                Ok(body) => body,
+                Err(err) => {
+                    println!("Error serializing payload: {:#?}", err);
+                    return None;
+                }
+            };
+            println!("Sending message: {body} to chat {}", payload.chat_id);
+            self.client.post(&url, body).await
+        };
+
+        match resp {
+            Ok(resp) => {
+                let result = unwrap_or!(
+                    serde_json::from_str::<serde_json::Value>(&resp),
+                    |e| println!("Error parsing response: {:#?}\n", e),
+                    return None
+                );
+                let result = unwrap_or!(result.get("result"), return None);
+                let result = unwrap_or!(
+                    serde_json::from_value::<Message>(result.to_owned()),
+                    |x| { println!("Error parsing response: {:#?}\nfrom: {}", x, resp) },
+                    return None
+                );
+
+                Some(result)
+            }
+            Err(err) => {
+                println!("Err on request: {:#?}", self.client.format_error(err));
+                None
+            }
         }
     }
 

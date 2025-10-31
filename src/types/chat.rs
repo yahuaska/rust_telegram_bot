@@ -12,6 +12,12 @@ pub struct Chat {
     username: Option<String>,
 }
 
+impl Chat {
+    pub fn id(&self) -> i64 {
+        self.id
+    }
+}
+
 impl Display for Chat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let chat_name = format!(

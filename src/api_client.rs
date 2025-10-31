@@ -22,18 +22,25 @@ macro_rules! unwrap_or {
         }
     };
     ($expr:expr, return) => {
-        match $expr {
-            Some(val) => val,
-            None => return,
-        }
+        unwrap_or!($expr, return ())
     };
+
     ($expr:expr, $on_err:expr, return) => {
+        unwrap_or!($expr, $on_err, return ())
+    };
+    ($expr:expr, $on_err:expr, return $rt:expr) => {
         match $expr {
             Ok(val) => val,
             Err(e) => {
                 $on_err(e);
-                return;
+                return $rt;
             }
+        }
+    };
+    ($expr:expr, return $rt:expr) => {
+        match $expr {
+            Some(val) => val,
+            None => return $rt,
         }
     };
 }

@@ -10,6 +10,7 @@ use std::env;
 
 pub mod api_client;
 pub mod commands;
+pub mod http_client;
 pub mod http_clients;
 pub mod types;
 

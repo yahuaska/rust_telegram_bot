@@ -1,8 +1,8 @@
 use crate::api_client::ApiClient;
 use crate::commands::{decide_command, Command};
 use crate::http_clients::ReqwestHttpClient;
+use crate::types::Bot;
 use crate::types::BotConfig;
-use crate::types::GetMeResponse;
 use tokio::sync::mpsc;
 
 use futures_util::StreamExt;
@@ -14,18 +14,20 @@ pub mod http_client;
 pub mod http_clients;
 pub mod types;
 
-fn print_me(resp: GetMeResponse) {
-    if resp.ok {
+fn print_me(resp: Option<Bot>) {
+    if let Some(resp) = resp {
         println!("Status: OK");
         println!(
             "My ID: {}\nMy name is: {} ({})",
-            resp.result.id, resp.result.first_name, resp.result.username
+            resp.id, resp.first_name, resp.username
         );
-        if resp.result.is_bot {
+        if resp.is_bot {
             println!("I am a bot!");
         } else {
             println!("I am not a bot!");
         }
+    } else {
+        println!("Status: ERROR");
     }
 }
 
@@ -35,7 +37,7 @@ async fn updates_loop(bot_config: BotConfig, tx: mpsc::Sender<Command>) {
         |token: &str, method: &str| format!("https://api.telegram.org/bot{token}/{method}"),
         bot_config,
     );
-    print_me(api_client.get_me().await.unwrap());
+    print_me(api_client.get_me().await);
     loop {
         println!("Running the generator");
         let stream = api_client.yield_updates().await;

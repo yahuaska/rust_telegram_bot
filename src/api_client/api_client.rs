@@ -78,6 +78,7 @@ impl<T: HttpClient + Clone> ApiClient<T> {
             .get("result")
             .and_then(|x| Self::parse_response(x.to_owned()))?
     }
+
     async fn get_updates(client: T, url: String) -> Option<Vec<Update>> {
         println!("Calling: {url}");
         let resp = client
@@ -112,14 +113,12 @@ impl<T: HttpClient + Clone> ApiClient<T> {
                 }
                 None => {}
             }
-
         }
     }
 
     /// Get information about the bot itself.
     pub async fn get_me(&mut self) -> Option<Bot> {
         let url = self.url("getMe");
-        println!("Calling: {url}");
         let payload = self
             .client
             .get(&url)
@@ -132,11 +131,13 @@ impl<T: HttpClient + Clone> ApiClient<T> {
             .and_then(|ok| ok.as_bool())
             .unwrap_or(false)
         {
-            return None;
+            return payload.get("result").and_then(|result| {
+                serde_json::from_value::<Bot>(result.clone())
+                    .map_err(|err| println!("Error: {err:#?}"))
+                    .ok()
+            });
         }
-        payload
-            .get("result")
-            .and_then(|result| serde_json::from_value(result.clone()).ok())
+        return None;
     }
 
     fn url(&self, method: &str) -> String {

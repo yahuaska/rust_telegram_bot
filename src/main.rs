@@ -1,4 +1,5 @@
 use crate::api_client::ApiClient;
+use crate::commands::EchoCommandHandler;
 use crate::core::{bot, decide_command, Command, CommandRegistry, Registry};
 use crate::http_client::HttpClient;
 use crate::http_clients::ReqwestHttpClient;
@@ -97,6 +98,10 @@ async fn main() {
         Arc::new(ReqwestHttpClient::new()),
         bot_config.clone(),
     ));
+    let command_handler = Arc::new(EchoCommandHandler::new(api_client.clone()));
+    registry
+        .register(crate::core::BotCommand::Echo, command_handler)
+        .await;
 
     tokio::spawn(updates_loop(api_client.clone(), tx.clone()));
     tokio::spawn(async move {

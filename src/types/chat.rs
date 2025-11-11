@@ -13,6 +13,7 @@ pub struct Chat {
 }
 
 impl Chat {
+    /// Returns the ID of the chat.
     pub fn id(&self) -> i64 {
         self.id
     }

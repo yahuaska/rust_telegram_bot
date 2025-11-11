@@ -46,10 +46,3 @@ impl Update {
         self.update_id
     }
 }
-
-#[derive(Clone, Debug)]
-pub struct BotConfig {
-    pub token: String,
-    pub offset: i64,
-    pub polling_timeout: u64,
-}

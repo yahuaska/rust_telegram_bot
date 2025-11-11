@@ -1,8 +1,9 @@
 use crate::api_client::ApiClient;
-use crate::commands::{decide_command, Command};
+use crate::core::{bot, decide_command, Command, CommandRegistry, Registry};
+use crate::http_client::HttpClient;
 use crate::http_clients::ReqwestHttpClient;
 use crate::types::Bot;
-use crate::types::BotConfig;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use futures_util::StreamExt;
@@ -10,6 +11,7 @@ use std::env;
 
 pub mod api_client;
 pub mod commands;
+pub mod core;
 pub mod http_client;
 pub mod http_clients;
 pub mod types;
@@ -31,12 +33,10 @@ fn print_me(resp: Option<Bot>) {
     }
 }
 
-async fn updates_loop(bot_config: BotConfig, tx: mpsc::Sender<Command>) {
-    let mut api_client = ApiClient::new(
-        ReqwestHttpClient::new(),
-        |token: &str, method: &str| format!("https://api.telegram.org/bot{token}/{method}"),
-        bot_config,
-    );
+async fn updates_loop<T>(api_client: Arc<ApiClient<T>>, tx: mpsc::Sender<Command>)
+where
+    T: HttpClient,
+{
     print_me(api_client.get_me().await);
     loop {
         println!("Running the generator");
@@ -75,45 +75,39 @@ async fn updates_loop(bot_config: BotConfig, tx: mpsc::Sender<Command>) {
     }
 }
 
-async fn worker(bot_config: BotConfig, mut rx: mpsc::Receiver<Command>) {
-    let api_client = ApiClient::new(
-        ReqwestHttpClient::new(),
-        |token: &str, method: &str| format!("https://api.telegram.org/bot{token}/{method}"),
-        bot_config,
-    );
-    while let Some(command) = rx.recv().await {
-        let text = format!(
-            "*Command*: {:#?},\n*args*: `{:#?}`\n`#{}`\n",
-            command.command, command.args, command.message.message_id
-        );
-        let message = api_client
-            .send_message(command.message.chat.id(), text)
-            .await;
-        if let Some(message) = message {
-            println!("Get back message:\n {message:#}");
-        }
-    }
-}
-
 #[tokio::main]
 async fn main() {
-    let (tx, rx) = tokio::sync::mpsc::channel(100);
-    let _: &mpsc::Sender<Command> = &tx;
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<Command>(100);
+    let registry = Registry::new();
     const TOKEN_KEY: &str = "TOKEN";
-    let bot_config = match env::var(TOKEN_KEY) {
-        Ok(val) => BotConfig {
+    let bot_config = Arc::new(match env::var(TOKEN_KEY) {
+        Ok(val) => bot::Bot {
             token: val.to_owned(),
-            offset: 0,
+            offset: 0.into(),
             polling_timeout: 30,
+            base_url: String::from("https://api.telegram.org"),
+            handlers: registry.clone(),
         },
         Err(_) => {
             println!("Warning: {} is not set. Using default token.", TOKEN_KEY);
             return;
         }
-    };
+    });
+    let api_client = Arc::new(ApiClient::new(
+        Arc::new(ReqwestHttpClient::new()),
+        bot_config.clone(),
+    ));
 
-    tokio::spawn(updates_loop(bot_config.clone(), tx.clone()));
-    tokio::spawn(worker(bot_config.clone(), rx));
+    tokio::spawn(updates_loop(api_client.clone(), tx.clone()));
+    tokio::spawn(async move {
+        while let Some(command) = rx.recv().await {
+            bot_config
+                .clone()
+                .handlers
+                .dispatch(bot_config.clone(), command)
+                .await;
+        }
+    });
     // ждём, пока не нажмут Ctrl+C
     tokio::signal::ctrl_c().await.unwrap();
 }

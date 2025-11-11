@@ -1,23 +1,27 @@
+use std::sync::Arc;
+
 use crate::api_client::types::Payload;
+use crate::core::bot::Bot as BotConfig;
 use crate::http_client::HttpClient;
-use crate::types::{Bot, BotConfig, Message, Update};
+use crate::types::{Bot, Message, Update};
 use futures_core::stream::Stream;
 use std::collections::HashMap;
 
-type UrlFormatter = fn(&str, &str) -> String;
-
-impl<T: HttpClient + Clone> ApiClient<T> {
-    pub fn new(client: T, url_format: UrlFormatter, bot_config: BotConfig) -> Self {
-        Self {
-            client,
-            url_format,
-            bot_config,
-        }
+impl<T: HttpClient> ApiClient<T> {
+    pub fn new(client: Arc<T>, bot_config: Arc<BotConfig>) -> Self {
+        Self { client, bot_config }
     }
 
-    pub fn update_offset(&mut self, offset: i64) {
-        if offset >= self.bot_config.offset {
-            self.bot_config.offset = offset + 1;
+    pub fn update_offset(&self, offset: i64) {
+        if offset
+            >= self
+                .bot_config
+                .offset
+                .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            self.bot_config
+                .offset
+                .store(offset + 1, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
@@ -40,7 +44,7 @@ impl<T: HttpClient + Clone> ApiClient<T> {
 
     /// Send a message to the chat.
     pub async fn send_message(&self, chat_id: i64, text: String) -> Option<Message> {
-        let url = self.url("sendMessage");
+        let url = self.bot_config.url("sendMessage");
         let payload = Payload::new(chat_id, text, String::from("MarkdownV2"));
         let body = serde_json::to_string(&payload)
             .map_err(|err| println!("Error serializing payload: {:#?}", err))
@@ -63,7 +67,7 @@ impl<T: HttpClient + Clone> ApiClient<T> {
         attach_name: &str,
         video_path: &str,
     ) -> Option<Message> {
-        let url = self.url("sendVideo");
+        let url = self.bot_config.url("sendVideo");
         let body = HashMap::from([
             ("chat_id".to_string(), chat_id.to_string()),
             ("video".to_string(), format!("attach://{}", attach_name)),
@@ -79,7 +83,7 @@ impl<T: HttpClient + Clone> ApiClient<T> {
             .and_then(|x| Self::parse_response(x.to_owned()))?
     }
 
-    async fn get_updates(client: T, url: String) -> Option<Vec<Update>> {
+    async fn get_updates(client: Arc<T>, url: String) -> Option<Vec<Update>> {
         println!("Calling: {url}");
         let resp = client
             .get(&url)
@@ -99,8 +103,10 @@ impl<T: HttpClient + Clone> ApiClient<T> {
     pub async fn yield_updates(&self) -> impl Stream<Item = Update> {
         let url = format!(
             "{}?offset={}&timeout={}",
-            self.url("getUpdates"),
-            self.bot_config.offset,
+            self.bot_config.url("getUpdates"),
+            self.bot_config
+                .offset
+                .load(std::sync::atomic::Ordering::Relaxed),
             self.bot_config.polling_timeout
         );
         let client = self.client.clone();
@@ -111,14 +117,18 @@ impl<T: HttpClient + Clone> ApiClient<T> {
                         yield update;
                     }
                 }
-                None => {}
+                None => {
+                    // Handle the case when no updates are received
+                    // For example, you can log a message or retry the request
+                    println!("No updates received");
+                }
             }
         }
     }
 
     /// Get information about the bot itself.
-    pub async fn get_me(&mut self) -> Option<Bot> {
-        let url = self.url("getMe");
+    pub async fn get_me(&self) -> Option<Bot> {
+        let url = self.bot_config.url("getMe");
         let payload = self
             .client
             .get(&url)
@@ -139,14 +149,9 @@ impl<T: HttpClient + Clone> ApiClient<T> {
         }
         return None;
     }
-
-    fn url(&self, method: &str) -> String {
-        (self.url_format)(&self.bot_config.token, method)
-    }
 }
 
 pub struct ApiClient<T: HttpClient> {
-    client: T,
-    url_format: UrlFormatter,
-    bot_config: BotConfig,
+    client: Arc<T>,
+    bot_config: Arc<BotConfig>,
 }
